@@ -1,0 +1,15 @@
+app: kolibri-channel-builder
+idea_app_version: "1.0"
+
+compatibility:
+  engine_min: "0.9.0"
+  engine_tested: "unknown"
+  kolibri: "0.15.5"   # content schema must match app-kolibri's Kolibri
+
+services:
+  - name: builder
+    build: custom
+    dockerfile: Dockerfile
+    image: koenswings/kolibri-channel-builder
+    current_version: "1.0-0.15.5"
+    monitors: []   # follows app-kolibri's Kolibri version, not upstream releases

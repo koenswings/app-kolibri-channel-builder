@@ -1,0 +1,3 @@
+# Must match the Kolibri version app-kolibri ships (koenswings/app-kolibri compose.yaml).
+kolibri==0.15.5
+setuptools<70  # kolibri 0.15 imports pkg_resources
