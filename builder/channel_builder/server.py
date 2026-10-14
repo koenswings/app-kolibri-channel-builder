@@ -89,6 +89,28 @@ def public_repr(ch):
             "public": False, "included_languages": []}
 
 
+FILES_JSON = ".idea-files.json"
+
+
+def files_disk_names():
+    """{slug-id6 folder: shareName} from the Engine's read-only .idea-files.json (idea#133)."""
+    try:
+        with open(os.path.join(FILES_ROOT, FILES_JSON), encoding="utf-8") as fh:
+            d = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in d.items() if isinstance(v, str) and v.strip()} if isinstance(d, dict) else {}
+
+
+def files_disks():
+    """[(disk folder, share name)] for each Files Disk mounted under FILES_ROOT."""
+    if not os.path.isdir(FILES_ROOT):
+        return []
+    names = files_disk_names()
+    return [(d, names.get(d) or d) for d in sorted(os.listdir(FILES_ROOT))
+            if not d.startswith(".") and os.path.isdir(os.path.join(FILES_ROOT, d))]
+
+
 def files_disk_folders(max_depth=3):
     """Folders a teacher can pick on mounted Files Disks (relative to FILES_ROOT)."""
     res = []
@@ -103,6 +125,46 @@ def files_disk_folders(max_depth=3):
         if depth >= 1:
             res.append(os.path.relpath(cur, FILES_ROOT))
     return res
+
+
+def unique_labels(labels):
+    """Add ' (2)', ' (3)'... to repeated display names, in order."""
+    seen, out = set(), []
+    for lab in labels:
+        cand, n = lab, 1
+        while cand in seen:
+            n += 1
+            cand = "%s (%d)" % (lab, n)
+        seen.add(cand)
+        out.append(cand)
+    return out
+
+
+def picker_groups(sticks=None):
+    """Folder picker grouped per Files Disk / USB stick, always under its own name.
+
+    [{kind, id, label, options: [(value, text)]}]. value stays the disk folder or
+    stickId path (stable); label is the display name with a clash suffix.
+    """
+    if sticks is None:
+        sticks = usb.list_sticks(USB_ROOT)
+    folders = files_disk_folders()
+    raw = []
+    for slug, name in files_disks():
+        opts = [(f, f[len(slug) + 1:] if f != slug else "(whole disk)")
+                for f in folders if f == slug or f.startswith(slug + "/")]
+        raw.append(dict(kind="files", id=slug, label="Files Disk: " + name, options=opts))
+    for st in sticks:
+        opts = [("%s/%s" % (st["stickId"], f), f) for f in usb.stick_folders(st)]
+        raw.append(dict(kind="usb", id=st["stickId"], label=st["displayName"], options=opts))
+    for g, lab in zip(raw, unique_labels([g["label"] for g in raw])):
+        g["label"] = lab
+    return raw
+
+
+def stick_labels():
+    """stickId -> unique display label for the sticks plugged in now."""
+    return {g["id"]: g["label"] for g in picker_groups() if g["kind"] == "usb"}
 
 
 def safe_files_path(rel):
@@ -169,13 +231,14 @@ def prepare_build(f):
             raise ValueError("That USB stick is not plugged in (any more).")
         src = usb.safe_stick_path(stick, rel)
         rel = os.path.relpath(src, os.path.realpath(stick["path"]))
-        return ("%s (%s / %s)" % (name, stick["displayName"], rel),
+        return ("%s (%s / %s)" % (name, stick_labels().get(stick["stickId"], stick["displayName"]), rel),
                 lambda job: _usb_build(stick, src, rel, name, author, desc, lic, lic_desc, job))
     if source != "files":
         raise ValueError("Unknown source.")
     src = safe_files_path(f.get("folder", ""))
     rel = os.path.relpath(src, os.path.realpath(FILES_ROOT))
-    return ("%s (Files Disk: %s)" % (name, rel),
+    disk = dict(files_disks()).get(rel.split("/", 1)[0], rel.split("/", 1)[0])
+    return ("%s (Files Disk: %s / %s)" % (name, disk, rel.partition("/")[2] or "all files"),
             lambda job: Builder(src, EXPORT_DIR, name, author, "files:%s" % rel, desc, lic, lic_desc,
                                 progress=job.progress).build())
 
@@ -330,42 +393,64 @@ def queue_status():
     return QUEUE.snapshot()
 
 
-PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Kolibri channel builder</title><style>body{{font-family:sans-serif;max-width:46em;margin:2em auto;padding:0 1em}}
-label{{display:block;margin:.6em 0 .2em}}input,select,textarea{{width:100%;padding:.4em;box-sizing:border-box}}button{{margin-top:1em;padding:.6em 1.2em}}
-.warn{{color:#a60}}.err{{color:#b00}}.ok{{color:#060}}table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #ddd;padding:.3em;text-align:left}}
-.box{{border:1px solid #ccc;border-radius:6px;padding:.6em 1em;margin:1em 0;background:#fafafa}}.box h2{{margin:.2em 0 .4em;font-size:1.1em}}
-progress{{width:100%}}[hidden]{{display:none!important}}</style></head>
-<body><h1>Make a Kolibri channel</h1>
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kolibri channel builder</title><style>
+:root{{--red:#c51a4a;--blue:#1f4e79;--blue2:#1f77b4;--green:#2ca02c;--ink:#1a1a1a}}
+*{{box-sizing:border-box}}
+html{{font-family:"DejaVu Sans",Verdana,Arial,sans-serif;font-size:16px;line-height:1.45;color:var(--ink);background:#f4f5f7}}
+body{{max-width:52em;margin:0 auto;padding:0 1em 2em;background:#fff;min-height:100vh}}
+.bar{{height:.5em;background:linear-gradient(90deg,var(--red),var(--blue2),var(--green));border-radius:0 0 .25em .25em;margin:0 -1em 1em}}
+h1{{font-size:1.6em;color:var(--red);border-bottom:2px solid var(--red);padding-bottom:.2em;margin:.4em 0 .6em}}
+h2{{font-size:1.2em;color:var(--blue);margin:1.2em 0 .4em}}
+.box h2{{margin:.1em 0 .4em;font-size:1.08em}}
+p{{margin:.4em 0}}
+code{{font-family:"DejaVu Sans Mono",monospace;font-size:.9em;background:#f2f2f2;padding:0 .2em;border-radius:2px;word-break:break-all}}
+.box{{background:#eef5ff;border-left:5px solid var(--blue2);border-radius:3px;padding:.6em 1em;margin:1em 0}}
+.box.alert{{background:#fff4e5;border-left-color:#ff7f0e}}
+.card{{border:1px solid #ccc;border-radius:4px;padding:.8em 1em;margin:1em 0;background:#fff}}
+label{{display:block;margin:.8em 0 .25em;font-weight:bold;color:var(--blue)}}
+input,select,textarea{{width:100%;padding:.55em;font:inherit;border:1px solid #bbb;border-radius:3px;background:#fff}}
+button{{margin-top:1.2em;padding:.7em 1.4em;font:inherit;font-weight:bold;color:#fff;background:var(--red);border:0;border-radius:3px;cursor:pointer}}
+.warn{{color:#a65400}}.err{{color:#b00020;font-weight:bold}}.ok{{color:#1e7a1e}}
+p.err{{background:#fff0f3;border-left:5px solid var(--red);padding:.5em .8em}}
+table{{border-collapse:collapse;width:100%;font-size:.92em}}
+th{{background:var(--blue);color:#fff;text-align:left;padding:.35em .5em}}
+td{{border:1px solid #ccc;padding:.35em .5em;vertical-align:top}}tr:nth-child(even) td{{background:#fafafa}}
+.table-wrap{{overflow-x:auto}}
+progress{{width:100%}}[hidden]{{display:none!important}}ul{{padding-left:1.2em}}li{{margin:.2em 0}}
+@media (max-width:600px){{html{{font-size:15px}}body{{padding:0 .7em 1.5em}}.bar{{margin:0 -.7em .8em}}h1{{font-size:1.35em}}button{{width:100%}}}}
+</style><noscript><style>[data-src][hidden]{{display:block!important}}</style></noscript></head>
+<body><div class="bar"></div><h1>Make a Kolibri channel</h1>
 <div id="job">{job}</div>
 <div class="box" id="queue"><h2>Builds</h2><div id="queue-body">{queue}</div></div>
 <div class="box" id="usb"><h2>From USB sticks</h2><div id="usb-body">{usb}</div></div>
 <div id="msg">{msg}</div>{empty}
+<div class="card">
 <p>Each folder becomes a topic, each file a resource. Supported: PDF, EPUB, MP4/WebM (H.264/VP8/VP9), MP3, images.</p>
+<noscript><p class="warn">JavaScript is off: all fields are shown. Fill in only the fields for the source you pick; the Nextcloud user and password are needed only for Nextcloud.</p></noscript>
 <form method="post" action="/build" id="form">
 <label for="source">Where are the files?</label><select name="source" id="source">{sources}</select>
-<div data-src="files"{hid_files}><label for="folder">Files Disk folder</label><select name="folder" id="folder">{folders}</select></div>
-<div data-src="usb"{hid_usb}><label for="usb_folder">USB stick folder</label><select name="usb_folder" id="usb_folder">{usb_folders}</select></div>
-<div data-src="nextcloud"{hid_nc}><label for="nc_folder">Nextcloud folder, e.g. Documents/Science</label><input name="nc_folder" id="nc_folder" value="{v_nc_folder}">
-<label>Nextcloud user</label><input name="nc_user" autocomplete="username" value="{v_nc_user}">
-<label>Nextcloud password or app password</label><input type="password" name="nc_password"></div>
+<div data-src="files"{hid_files}><label for="folder">Folder on a Files Disk</label><select name="folder" id="folder">{folders}</select></div>
+<div data-src="usb"{hid_usb}><label for="usb_folder">Folder on a USB stick</label><select name="usb_folder" id="usb_folder">{usb_folders}</select></div>
+<div data-src="nextcloud"{hid_nc} id="nc-fields"><label for="nc_folder">Nextcloud folder, e.g. Documents/Science</label><input name="nc_folder" id="nc_folder" value="{v_nc_folder}">
+<label for="nc_user">Nextcloud user</label><input name="nc_user" id="nc_user" autocomplete="username" value="{v_nc_user}">
+<label for="nc_password">Nextcloud password or app password</label><input type="password" name="nc_password" id="nc_password" autocomplete="current-password"></div>
 <label for="name">Channel name</label><input name="name" id="name" required value="{v_name}">
-<label>Description</label><textarea name="description" rows="2">{v_description}</textarea>
-<label>Author (teacher name{author_hint})</label><input name="author" id="author" value="{v_author}">
-<label>Licence</label><select name="license">{licenses}</select>
-<label>Licence description</label><input name="license_description" value="{v_license_description}">
-<button type="submit" id="build">Build channel</button></form>
-<h2>Built channels</h2><table id="channels"><tr><th>Name</th><th>Version</th><th>Resources</th><th>Author</th></tr>{channels}</table>
-<p><b>To import into Kolibri</b> (nothing is imported automatically): in Kolibri open
+<label for="description">Description</label><textarea name="description" id="description" rows="2">{v_description}</textarea>
+<label for="author">Author (teacher name{author_hint})</label><input name="author" id="author" value="{v_author}">
+<label for="license">Licence</label><select name="license" id="license">{licenses}</select>
+<label for="license_description">Licence description</label><input name="license_description" id="license_description" value="{v_license_description}">
+<button type="submit" id="build">Build channel</button></form></div>
+<h2>Built channels</h2><div class="table-wrap"><table id="channels"><tr><th>Name</th><th>Version</th><th>Resources</th><th>Author</th></tr>{channels}</table></div>
+<div class="box"><p><b>To import into Kolibri</b> (nothing is imported automatically): in Kolibri open
 Device &rarr; Channels &rarr; Import &rarr; Local network or internet, add the address
-<code id="kolibri-address">{address}</code>, pick the channel and click Import.{address_hint}</p>
+<code id="kolibri-address">{address}</code>, pick the channel and click Import.{address_hint}</p></div>
 <script>
 (function(){{
 var src=document.getElementById('source');
 function show(){{document.querySelectorAll('[data-src]').forEach(function(d){{d.hidden=d.getAttribute('data-src')!==src.value;}});}}
 src.addEventListener('change',show);show();
 var jobId={job_id};
-function esc(s){{return String(s).replace(/[&<>"]/g,function(c){{return {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c];}});}}
 function tick(){{
  fetch('/api/fragments'+(jobId?'?job='+jobId:'')).then(function(r){{return r.json();}}).then(function(d){{
   document.getElementById('queue-body').innerHTML=d.queue;document.getElementById('usb-body').innerHTML=d.usb;
@@ -408,6 +493,7 @@ def render_usb():
         return ("<p>No USB stick with files for this builder. Put a folder named <code>kolibri</code> on a stick "
                 "with one folder per channel inside it, and plug it in: channels are built automatically.</p>")
     out = []
+    labels = stick_labels()
     for st in s["sticks"]:
         state = st["state"] if st["present"] or st["state"] == "built" else (
             "removed" if st["state"] != "failed" else "failed")
@@ -423,7 +509,7 @@ def render_usb():
             w = "".join('<br><span class="warn">%s</span>' % html.escape(x) for x in c["warnings"])
             items.append("<li>%s: %s%s</li>" % (html.escape(c["name"]), lab, w))
         out.append('<p><b>%s</b> <span class="%s">%s</span></p><ul>%s</ul>' % (
-            html.escape(st["displayName"]), cls, html.escape(msg), "".join(items)))
+            html.escape(labels.get(st["stickId"], st["displayName"])), cls, html.escape(msg), "".join(items)))
     return "".join(out)
 
 
@@ -470,18 +556,26 @@ def render(msg="", port=8090, values=None, job=None, host=""):
     opts = lambda items, sel=None: "".join(
         '<option value="%s"%s>%s</option>' % (html.escape(a), " selected" if a == sel else "", html.escape(t))
         for a, t in items)
-    sticks = usb.list_sticks(USB_ROOT)
-    sources = [("files", "Files Disk")] + ([("usb", "USB stick")] if sticks or v.get("source") == "usb" else []) + \
+    groups = picker_groups()
+    fg = [g for g in groups if g["kind"] == "files"]
+    ug = [g for g in groups if g["kind"] == "usb"]
+    sources = ([("files", ", ".join(g["label"] for g in fg))] if fg else []) + \
+        ([("usb", ", ".join(g["label"] for g in ug))] if ug else []) + \
         ([("nextcloud", "Nextcloud")] if NEXTCLOUD_URL else [])
-    src = v.get("source") if v.get("source") in dict(sources) else "files"
-    usb_folders = [("%s/%s" % (s["stickId"], f), "%s / %s" % (s["displayName"], f))
-                   for s in sticks for f in usb.stick_folders(s)]
+    if not sources:
+        sources = [("files", "Files Disk: none docked")]
+    src = v.get("source") if v.get("source") in dict(sources) else sources[0][0]
+
+    def grouped(gs, sel):
+        return "".join('<optgroup label="%s">%s</optgroup>' % (html.escape(g["label"]), "".join(
+            '<option value="%s"%s>%s / %s</option>' % (html.escape(val), " selected" if val == sel else "",
+                                                       html.escape(g["label"]), html.escape(t))
+            for val, t in g["options"])) for g in gs if g["options"])
     e = lambda k, d="": html.escape(v.get(k, d))
     hid = lambda name: "" if name == src else " hidden"
-    files_folders = files_disk_folders()
     empty = ""
-    if not files_folders and not usb_folders and not NEXTCLOUD_URL:
-        empty = ('<div class="box" id="empty"><h2>No folders to build from yet</h2><p>This builder finds no '
+    if not any(g["options"] for g in groups) and not NEXTCLOUD_URL:
+        empty = ('<div class="box alert" id="empty"><h2>No folders to build from yet</h2><p>This builder finds no '
                  'Files Disk folders, no USB stick and no Nextcloud. To get started, plug in a USB stick with '
                  'your files (a <code>kolibri</code> folder on it is built automatically), or ask your IDEA '
                  'operator to dock a Files Disk or to connect Nextcloud.</p></div>')
@@ -489,9 +583,9 @@ def render(msg="", port=8090, values=None, job=None, host=""):
     return PAGE.format(
         msg=msg, job=render_job(job), job_id=json.dumps(job.id if job else None),
         queue=render_queue(), usb=render_usb(), sources=opts(sources, src),
-        folders=opts([(f, f) for f in files_folders], v.get("folder")), empty=empty,
+        folders=grouped(fg, v.get("folder")), empty=empty,
         address=address, address_hint=address_hint,
-        usb_folders=opts(usb_folders, v.get("usb_folder")),
+        usb_folders=grouped(ug, v.get("usb_folder")),
         hid_files=hid("files"), hid_usb=hid("usb"), hid_nc=hid("nextcloud"),
         v_nc_folder=e("nc_folder"), v_nc_user=e("nc_user"), v_name=e("name"), v_description=e("description"),
         v_author=e("author"), author_hint="; empty = your Nextcloud name for Nextcloud builds" if NEXTCLOUD_URL else "",

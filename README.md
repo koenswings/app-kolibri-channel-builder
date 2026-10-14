@@ -97,3 +97,15 @@ PATH=.venv/bin:$PATH python -m pytest -v tests
 ```
 
 See [docs/INDEX.md](docs/INDEX.md).
+
+## Picker and look (house style)
+
+- The source and folder pickers always name each Files Disk (`Files Disk: <shareName>` from the Engine's
+  `.idea-files.json`, falling back to the disk folder) and each USB stick (`displayName` from `.idea-usb.json`),
+  even when only one is present; folders are grouped per disk/stick (`<optgroup>`). Repeated names get ` (2)`,
+  ` (3)`. The submitted value stays the stable disk folder / `stickId` path, never the display name.
+- `.idea-usb.json` (Engine PR #205, `docs/USB-STICKS.md`) is the complete list: a stick missing from it is gone
+  even if its folder remains; unknown fields are ignored.
+- The Nextcloud folder/user/password fields show only for the Nextcloud source (inline JS); without JS all fields
+  are shown with a note. Styling follows the IDEA house style (red/blue headings, callout cards, blue table
+  headers, DejaVu Sans/system fonts), fully offline, responsive down to phone width.

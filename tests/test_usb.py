@@ -77,7 +77,7 @@ def test_both_roots_in_form(builder_env):
     kolibri_stick(fu)
     page = s.render()
     assert "disk1/Science" in page and "USB: MARY-STICK / kolibri/Grade 6 Maths" in page
-    assert '<option value="usb">USB stick</option>' in page
+    assert '<option value="usb">USB: MARY-STICK</option>' in page
 
 
 @pytest.mark.parametrize("rel", ["../../etc", "/../..", "kolibri/../../../etc", "escape"])
@@ -252,7 +252,7 @@ def test_manual_build_waits_for_autobuild_and_shows_queued(builder_env, http):
                                                  author="T", **{"async": "1"})))
         assert r["state"] == "queued" and r["position"] == 3
         page = urllib.request.urlopen(http + "/").read().decode()  # a second teacher opens the page
-        assert "Songs (Files Disk: disk1/Music)" in page and "Queued (number 3 in line)" in page
+        assert "Songs (Files Disk: disk1 / Music)" in page and "Queued (number 3 in line)" in page
         assert json.load(urllib.request.urlopen(http + "/api/jobs/" + r["id"]))["state"] == "queued"
     finally:
         s.BUILD_LOCK.release()
@@ -378,7 +378,7 @@ def test_ui3_only_chosen_source_field_shown(builder_env, monkeypatch):
     kolibri_stick(fu)
     page = s.render(values={"source": "usb"})
     assert '<div data-src="usb">' in page
-    assert '<div data-src="files" hidden>' in page and '<div data-src="nextcloud" hidden>' in page
+    assert '<div data-src="files" hidden>' in page and '<div data-src="nextcloud" hidden id="nc-fields">' in page
     page = s.render()
     assert '<div data-src="files">' in page and '<div data-src="usb" hidden>' in page
 
