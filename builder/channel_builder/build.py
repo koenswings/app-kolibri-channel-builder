@@ -103,10 +103,26 @@ def image_zip(path, title):
     return buf.getvalue()
 
 
+def iter_supported(src):
+    """(relpath, abspath) of every file the builder would turn into a resource."""
+    for cur, dirs, files in os.walk(src):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for f in sorted(files):
+            if f.startswith("."):
+                continue
+            if os.path.splitext(f)[1].lower().lstrip(".") in TYPES:
+                p = os.path.join(cur, f)
+                yield os.path.relpath(p, src), p
+
+
+def count_supported(src):
+    return sum(1 for _ in iter_supported(src))
+
+
 class Builder(object):
     def __init__(self, src, out, name, author, source_id=None, description="",
                  license_name=DEFAULT_LICENSE, license_description=DEFAULT_LICENSE_DESCRIPTION,
-                 version=None, lang=None):
+                 version=None, lang=None, progress=None, check=None):
         self.src = os.path.abspath(src)
         self.out = os.path.abspath(out)
         self.name, self.author, self.description = name, author, description
@@ -115,6 +131,10 @@ class Builder(object):
         self.channel_id = uid("channel", self.source_id)
         self.version = version
         self.lang = lang
+        # progress(done, total) after each resource; check() before each file
+        # (raises to abort, e.g. when a USB stick was pulled out).
+        self.progress, self.check = progress, check
+        self.total, self.done = 0, 0
         self.warnings, self.skipped = [], []
         self.nodes, self.files, self.localfiles = [], [], {}
         self.storage = os.path.join(self.out, "KOLIBRI_DATA", "content", "storage")
@@ -181,6 +201,8 @@ class Builder(object):
             if ext not in TYPES:
                 self.skipped.append(r)
                 continue
+            if self.check:
+                self.check()
             kind, preset, activity = TYPES[ext]
             duration = None
             if kind in (content_kinds.VIDEO, content_kinds.AUDIO):
@@ -193,6 +215,9 @@ class Builder(object):
             sort += 1
             n = self._node(r, title, kind, parent["id"], level, ancestors, sort,
                            activity=activity, duration=duration)
+            self.done += 1
+            if self.progress:
+                self.progress(self.done, self.total)
             self.files.append(dict(id=uid(self.channel_id, "file", r, md5), supplementary=False,
                                    thumbnail=False, priority=1, contentnode_id=n["id"],
                                    lang_id=self.lang, local_file_id=md5, preset=preset))
@@ -215,6 +240,9 @@ class Builder(object):
     def build(self):
         os.makedirs(self.storage, exist_ok=True)
         os.makedirs(self.dbdir, exist_ok=True)
+        self.total = count_supported(self.src)
+        if self.progress:
+            self.progress(0, self.total)
         root = self._node("", self.name, content_kinds.TOPIC, None, 0, [], 0)
         root["description"] = self.description
         self._walk(self.src, "", root, 1, [{"id": root["id"], "title": root["title"]}])
