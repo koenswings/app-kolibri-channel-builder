@@ -15,6 +15,11 @@ x-app:
   filesMount:
     path: /mnt/idea-files
     services: [builder]
+  # idea#193: the Engine binds host /run/idea-usb here read-only (rslave), plus
+  # .idea-usb.json; sticks plugged in later appear without a recreate.
+  usbMount:
+    path: /mnt/idea-usb
+    services: [builder]
 services:
   builder:
     image: koenswings/kolibri-channel-builder:1.0-0.15.5
@@ -32,7 +37,16 @@ services:
       - EXPORT_DIR=/data/export
       - WORK_DIR=/data/work
       - FILES_ROOT=/mnt/idea-files
-      # Optional: Nextcloud on this Pi, e.g. http://${hostname}.local:<nextcloud port>.
-      # When set, every build requires a Nextcloud login (any teacher account).
+      - USB_ROOT=/mnt/idea-usb
+      # Auto-build sticks with a top-level kolibri/ folder (1/0) and the per-stick cap.
+      - AUTO_BUILD=1
+      - AUTO_BUILD_MAX_GB=8
+      # Optional: Nextcloud on this Pi. Use an IP, not a .local name (.local does not
+      # resolve inside containers). A login is asked only for the Nextcloud source.
       - NEXTCLOUD_URL=
+      # Optional: this Pi's LAN IP, shown as the address to add in Kolibri.
+      - LAN_IP=
+      # Published host port (the Engine's ${port}), shown in the Kolibri address
+      # instead of the container port 8090.
+      - PUBLIC_PORT=${port}
       - DEVICE_NAME=Channel builder (${hostname})
