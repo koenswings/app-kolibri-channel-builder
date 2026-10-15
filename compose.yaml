@@ -41,6 +41,8 @@ services:
       # Auto-build sticks with a top-level kolibri/ folder (1/0) and the per-stick cap.
       - AUTO_BUILD=1
       - AUTO_BUILD_MAX_GB=8
+      # Default channel language when a stick's channel.json has no valid "language".
+      - CHANNEL_LANGUAGE=en
       # Optional: Nextcloud on this Pi. Use an IP, not a .local name (.local does not
       # resolve inside containers). A login is asked only for the Nextcloud source.
       - NEXTCLOUD_URL=

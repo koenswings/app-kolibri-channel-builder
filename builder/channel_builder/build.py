@@ -26,7 +26,7 @@ import zipfile
 import kolibri  # noqa: F401  (sets up kolibri.dist on sys.path)
 from kolibri.core.content.constants.schema_versions import CONTENT_SCHEMA_VERSION
 from kolibri.core.content.contentschema.versions import content_schema_current as schema
-from le_utils.constants import content_kinds, format_presets, licenses
+from le_utils.constants import content_kinds, format_presets, languages, licenses
 from le_utils.constants.labels import learning_activities as la
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -51,6 +51,42 @@ TYPES = {
 }
 for _e in IMAGE_EXT:
     TYPES[_e] = (content_kinds.HTML5, format_presets.HTML5_ZIP, la.EXPLORE)
+
+
+FALLBACK_LANGUAGE = "en"
+
+
+def valid_language(code):
+    """Normalised le_utils language id ('en', 'pt-BR', ...) or None if unknown.
+
+    Accepts gettext-style values too ('en_US.UTF-8', 'fr:en' -> first entry)."""
+    if not isinstance(code, str):
+        return None
+    c = code.strip().split(":")[0].split(".")[0].replace("_", "-")
+    if not c or c in ("C", "POSIX"):
+        return None
+    for cand in (c, c.split("-")[0]):
+        lang = languages.getlang(cand) or languages.getlang(cand.lower())
+        if lang:
+            return lang.code if hasattr(lang, "code") else cand
+    return None
+
+
+def default_language():
+    """CHANNEL_LANGUAGE / LANGUAGE env (if valid), else 'en'."""
+    for var in ("CHANNEL_LANGUAGE", "LANGUAGE"):
+        v = valid_language(os.environ.get(var))
+        if v:
+            return v
+    return FALLBACK_LANGUAGE
+
+
+def language_row(code):
+    """content_language row (Kolibri 0.15.5 schema) for a valid language id."""
+    lang = languages.getlang(code)
+    return dict(id=code, lang_code=lang.primary_code, lang_subcode=lang.subcode,
+                lang_name=lang.native_name or lang.name,
+                lang_direction=languages.getlang_direction(code))
 
 
 def uid(*parts):
@@ -130,7 +166,9 @@ class Builder(object):
         self.source_id = source_id or self.src
         self.channel_id = uid("channel", self.source_id)
         self.version = version
-        self.lang = lang
+        # Every channel needs a language: Kolibri 0.15.5's html5_viewer reads
+        # contentNode.lang.id and crashes when lang is null.
+        self.lang = valid_language(lang) or default_language()
         # progress(done, total) after each resource; check() before each file
         # (raises to abort, e.g. when a USB stick was pulled out).
         self.progress, self.check = progress, check
@@ -260,8 +298,7 @@ class Builder(object):
         engine = create_engine("sqlite:///" + tmp)
         schema.metadata.create_all(engine)
         S = sessionmaker(bind=engine)()
-        if self.lang:
-            S.add(schema.ContentLanguage(id=self.lang, lang_code=self.lang, lang_direction="ltr"))
+        S.add(schema.ContentLanguage(**language_row(self.lang)))
         for md5, (ext, size) in self.localfiles.items():
             S.add(schema.ContentLocalfile(id=md5, available=False, file_size=size, extension=ext))
         S.flush()
@@ -277,11 +314,15 @@ class Builder(object):
             min_schema_version=CONTENT_SCHEMA_VERSION, root_id=self.channel_id,
             published_size=sum(s for _, s in self.localfiles.values()),
             total_resource_count=len(resources), public=False, tagline=None))
+        # 0.15.5 channel metadata has no lang_id column; the channel language is
+        # the root node's lang plus included_languages.
+        S.add(schema.ContentChannelmetadataIncludedLanguages(
+            channelmetadata_id=self.channel_id, language_id=self.lang))
         S.commit()
         S.close()
         engine.dispose()
         os.replace(tmp, dbpath)
-        return dict(channel_id=self.channel_id, version=version, db=dbpath,
+        return dict(channel_id=self.channel_id, version=version, db=dbpath, language=self.lang,
                     resources=len(resources), topics=len(self.nodes) - len(resources),
                     files=len(self.localfiles), warnings=self.warnings, skipped=self.skipped)
 
@@ -310,10 +351,11 @@ def main(argv=None):
     ap.add_argument("--license", default=DEFAULT_LICENSE)
     ap.add_argument("--license-description", default=DEFAULT_LICENSE_DESCRIPTION)
     ap.add_argument("--version", type=int)
+    ap.add_argument("--language", help="channel language (default: $LANGUAGE or en)")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     r = Builder(a.src, a.out, a.name, a.author, a.source_id, a.description,
-                a.license, a.license_description, a.version).build()
+                a.license, a.license_description, a.version, a.language).build()
     for w in r["warnings"]:
         log.warning(w)
     for s in r["skipped"]:
