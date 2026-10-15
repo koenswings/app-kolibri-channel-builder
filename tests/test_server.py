@@ -65,3 +65,32 @@ def test_nextcloud_required_when_login_enforced(server, monkeypatch):
     with pytest.raises(urllib.error.HTTPError) as e:
         post(server + "/build", {"source": "files", "folder": "disk1", "name": "x", "author": "T"})
     assert e.value.code == 400
+
+
+def test_resolve_device_name_explicit_wins():
+    from channel_builder.server import resolve_device_name
+    assert resolve_device_name({
+        "DEVICE_NAME": "My custom name",
+        "IDEA_PI_HOSTNAME": "wizardly-hugle",
+    }) == "My custom name"
+
+
+def test_resolve_device_name_hostname_when_no_explicit():
+    from channel_builder.server import resolve_device_name
+    assert resolve_device_name({
+        "DEVICE_NAME": "",
+        "IDEA_PI_HOSTNAME": "wizardly-hugle",
+    }) == "Channel builder (wizardly-hugle)"
+    assert resolve_device_name({
+        "IDEA_PI_HOSTNAME": "idea04",
+    }) == "Channel builder (idea04)"
+
+
+def test_resolve_device_name_plain_fallback():
+    """Unset/empty hostname must not use the container hostname or '()'."""
+    from channel_builder.server import resolve_device_name
+    assert resolve_device_name({}) == "Channel builder"
+    assert resolve_device_name({"DEVICE_NAME": "  ", "IDEA_PI_HOSTNAME": ""}) == "Channel builder"
+    assert resolve_device_name({"IDEA_PI_HOSTNAME": "   "}) == "Channel builder"
+    assert "()" not in resolve_device_name({"DEVICE_NAME": "", "IDEA_PI_HOSTNAME": ""})
+
