@@ -454,3 +454,28 @@ def test_empty_state_without_sources(builder_env, monkeypatch, tmp_path):
     assert 'id="empty"' in page and "No folders to build from yet" in page and 'class="err"' not in page
     kolibri_stick(fu)
     assert 'id="empty"' not in s.render()
+
+
+# -- idea04 e2e findings -------------------------------------------------------
+
+def test_kolibri_address_uses_public_port(builder_env, monkeypatch):
+    s, fu = builder_env
+    monkeypatch.setattr(s, "PUBLIC_PORT", "18400")
+    assert s.kolibri_address(8090, "192.168.1.20:18400")[0] == "http://192.168.1.20:18400"
+    assert s.kolibri_address(8090, "192.168.1.20")[0] == "http://192.168.1.20:18400"
+    monkeypatch.setattr(s, "LAN_IP", "10.0.0.5")
+    page = s.render(port=8090)
+    assert "http://10.0.0.5:18400" in page and ":8090" not in page
+
+
+def test_kolibri_address_port_from_host_header_without_public_port(builder_env, monkeypatch):
+    s, fu = builder_env
+    monkeypatch.setattr(s, "PUBLIC_PORT", "")
+    assert s.kolibri_address(8090, "192.168.1.20:18400")[0] == "http://192.168.1.20:18400"
+    assert s.kolibri_address(8090, "192.168.1.20")[0] == "http://192.168.1.20:8090"
+
+
+def test_compose_passes_public_port():
+    import os
+    root = os.path.join(os.path.dirname(__file__), "..")
+    assert "PUBLIC_PORT=${port}" in open(os.path.join(root, "compose.yaml")).read()

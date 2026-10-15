@@ -46,4 +46,7 @@ services:
       - NEXTCLOUD_URL=
       # Optional: this Pi's LAN IP, shown as the address to add in Kolibri.
       - LAN_IP=
+      # Published host port (the Engine's ${port}), shown in the Kolibri address
+      # instead of the container port 8090.
+      - PUBLIC_PORT=${port}
       - DEVICE_NAME=Channel builder (${hostname})

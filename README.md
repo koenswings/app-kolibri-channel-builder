@@ -69,6 +69,19 @@ compose can point at the ghcr image with `pull_policy: missing`.
 add in Kolibri: `LAN_IP` if set, otherwise the IP the browser used. If neither is
 available, it asks for the Pi's IP address from the Console.
 
+The port in that address is the **published host port**, not the container port
+8090. compose sets `PUBLIC_PORT=${port}` (the port the Engine assigns, e.g. 18400 on
+idea04). Without `PUBLIC_PORT` the page uses the port the browser used, and only
+falls back to 8090 if neither is known.
+
+## Data folders and permissions
+
+Docker (or the Engine) creates `./data/export` and `./data/work` as root when they
+don't exist yet. The image's entrypoint therefore starts as root, creates both
+folders, chowns them to the `builder` user (uid/gid 1000, override with
+`BUILDER_UID`/`BUILDER_GID`) only when needed, and then drops privileges with
+`setpriv`. The server itself never runs as root.
+
 ## Kolibri version coupling
 
 The channel DB is written with Kolibri's own SQLAlchemy content schema

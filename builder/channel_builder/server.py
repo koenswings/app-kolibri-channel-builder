@@ -41,6 +41,9 @@ AUTO_BUILD_MAX_BYTES = int(float(os.environ.get("AUTO_BUILD_MAX_GB", "8")) * 102
 # The Pi's LAN IP for the "add this address in Kolibri" hint: .local names
 # don't resolve inside the Kolibri container (found on wh). Optional.
 LAN_IP = os.environ.get("LAN_IP", "").strip()
+# Host port Docker publishes the UI on (compose: PUBLIC_PORT=${port}); the
+# container listens on PORT (8090), which Kolibri on the LAN cannot reach.
+PUBLIC_PORT = os.environ.get("PUBLIC_PORT", "").strip()
 USB_POLL_SECONDS = float(os.environ.get("USB_POLL_SECONDS", "5"))
 DEVICE_NAME = os.environ.get("DEVICE_NAME") or "IDEA channel builder (%s)" % socket.gethostname()
 INSTANCE_ID = os.environ.get("INSTANCE_ID", "1dea0c4a1b1100000000000000000000")
@@ -539,8 +542,19 @@ def render_channels():
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
 
+def public_port(port, host_header=""):
+    """The host port to show: PUBLIC_PORT, else the port the browser used, else PORT."""
+    if PUBLIC_PORT.isdigit():
+        return int(PUBLIC_PORT)
+    hp = (host_header or "").rsplit("]", 1)[-1]
+    if ":" in hp and hp.rsplit(":", 1)[1].isdigit():
+        return int(hp.rsplit(":", 1)[1])
+    return port
+
+
 def kolibri_address(port, host_header=""):
     """(address, hint) to type in Kolibri. An IP, never a .local name."""
+    port = public_port(port, host_header)
     host = (host_header or "").rsplit(":", 1)[0].strip("[]")
     if LAN_IP:
         return "http://%s:%d" % (LAN_IP, port), ""

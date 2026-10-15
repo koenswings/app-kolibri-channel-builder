@@ -41,6 +41,7 @@ def test_ui_screens(builder_env, http, browser, monkeypatch, tmp_path):
     s, fu = builder_env
     monkeypatch.setenv("UI_POLL_MS", "200")
     monkeypatch.setattr(s, "LAN_IP", "192.168.1.20")
+    monkeypatch.setattr(s, "PUBLIC_PORT", "18400")  # published host port, as on idea04
     files_root = s.FILES_ROOT
     page = browser.new_page(viewport={"width": 900, "height": 900})
 
@@ -54,7 +55,7 @@ def test_ui_screens(builder_env, http, browser, monkeypatch, tmp_path):
     # 2. Files Disk source: only its folder field is visible
     page.goto(http + "/")
     assert page.locator("#folder").is_visible() and not page.locator("#usb_folder").is_visible()
-    assert "http://192.168.1.20:" in page.locator("#kolibri-address").inner_text()
+    assert page.locator("#kolibri-address").inner_text().strip().startswith("http://192.168.1.20:18400")
     shot(page, "02-form-files-disk")
 
     # 3. a stick without a kolibri folder; USB source chosen -> only the USB field
