@@ -49,4 +49,7 @@ services:
       # Published host port (the Engine's ${port}), shown in the Kolibri address
       # instead of the container port 8090.
       - PUBLIC_PORT=${port}
-      - DEVICE_NAME=Channel builder (${hostname})
+      # Pi hostname for the Kolibri peer device_name. The Engine currently only
+      # sets ${hostname} for nextcloud; until it writes it for every app, this
+      # expands to empty and the server falls back to plain "Channel builder".
+      - IDEA_PI_HOSTNAME=${hostname:-}

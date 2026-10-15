@@ -74,6 +74,20 @@ The port in that address is the **published host port**, not the container port
 idea04). Without `PUBLIC_PORT` the page uses the port the browser used, and only
 falls back to 8090 if neither is known.
 
+## Kolibri device name
+
+The name Kolibri shows for this peer (`/api/public/info` → `device_name`) is:
+
+1. `DEVICE_NAME` if set to a non-empty value (operator override), else
+2. `Channel builder (<IDEA_PI_HOSTNAME>)` when compose passes the Pi hostname
+   (`IDEA_PI_HOSTNAME=${hostname:-}`), else
+3. plain `Channel builder`.
+
+It never uses the container hostname and never shows empty parentheses
+(`Channel builder ()`). Today the Engine only writes `${hostname}` into
+Nextcloud's `.env`; until it does so for every app, the builder falls back to
+the plain name. You can still set `DEVICE_NAME=...` in compose for a fixed label.
+
 ## Data folders and permissions
 
 Docker (or the Engine) creates `./data/export` and `./data/work` as root when they
