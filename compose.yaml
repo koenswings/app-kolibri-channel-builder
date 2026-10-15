@@ -1,0 +1,38 @@
+x-app:
+  name: kolibri-channel-builder
+  title: Kolibri Channel Builder
+  description: >
+    Turn a teacher's folders (from a Files Disk or Nextcloud) into a Kolibri
+    channel, offline. Folder = topic, file = resource (PDF, EPUB, MP4/WebM,
+    MP3, images). Kolibri imports the channel from this app over the local
+    network when a teacher or admin clicks Import in Kolibri.
+  url: https://github.com/koenswings/app-kolibri-channel-builder
+  category: education
+  icon: icon.png
+  author: Koen Swings
+  version: TBD-commit-sha
+  instanceName: kolibri-channel-builder
+  filesMount:
+    path: /mnt/idea-files
+    services: [builder]
+services:
+  builder:
+    image: koenswings/kolibri-channel-builder:1.0-0.15.5
+    restart: no
+    pull_policy: never
+    init: true
+    mem_limit: 300m
+    ports:
+      - ${port}:8090
+    volumes:
+      # Built channels (KOLIBRI_DATA/content/...) travel with the App Disk.
+      - ./data/export:/data/export
+      - ./data/work:/data/work
+    environment:
+      - EXPORT_DIR=/data/export
+      - WORK_DIR=/data/work
+      - FILES_ROOT=/mnt/idea-files
+      # Optional: Nextcloud on this Pi, e.g. http://${hostname}.local:<nextcloud port>.
+      # When set, every build requires a Nextcloud login (any teacher account).
+      - NEXTCLOUD_URL=
+      - DEVICE_NAME=Channel builder (${hostname})
