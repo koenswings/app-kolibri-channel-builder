@@ -22,9 +22,9 @@ x-app:
     services: [builder]
 services:
   builder:
-    image: koenswings/kolibri-channel-builder:1.0-0.15.5
+    image: ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5
     restart: no
-    pull_policy: never
+    pull_policy: missing
     init: true
     mem_limit: 300m
     ports:
