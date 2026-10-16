@@ -150,6 +150,13 @@ def read_channel_json(folder_abs, licence_ids):
     for k in ("name", "author", "description", "license_description"):
         if isinstance(d.get(k), str) and d[k].strip():
             meta[k] = d[k].strip()
+    lang = d.get("language")
+    if lang is not None:
+        from channel_builder.build import valid_language
+        if valid_language(lang):
+            meta["language"] = valid_language(lang)
+        else:
+            warns.append("channel.json: unknown language %r; using the default" % (lang,))
     lic = d.get("license")
     if lic is not None:
         if lic in licence_ids:

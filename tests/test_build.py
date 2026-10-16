@@ -79,3 +79,49 @@ def test_empty_folder_fails(tmp_path):
     (tmp_path / "src").mkdir()
     with pytest.raises(SystemExit):
         build(tmp_path / "src", tmp_path / "out")
+
+
+# -- language (Kolibri 0.15.5 html5_viewer reads contentNode.lang.id) ---------
+
+def _langs(db):
+    return dict(
+        languages=rows(db, "select id, lang_code, lang_direction from content_language"),
+        nodes=set(l for (l,) in rows(db, "select lang_id from content_contentnode")),
+        files=set(l for (l,) in rows(db, "select lang_id from content_file")),
+        root=rows(db, "select n.lang_id from content_contentnode n join content_channelmetadata c "
+                      "on c.root_id = n.id")[0][0],
+        included=rows(db, "select language_id from content_channelmetadata_included_languages"))
+
+
+def test_language_defaults_to_en(samples, tmp_path, monkeypatch):
+    monkeypatch.delenv("CHANNEL_LANGUAGE", raising=False)
+    monkeypatch.delenv("LANGUAGE", raising=False)
+    r = build(samples, tmp_path)
+    L = _langs(r["db"])
+    assert r["language"] == "en"
+    assert L["languages"] == [("en", "en", "ltr")]
+    assert L["nodes"] == L["files"] == {"en"} and L["root"] == "en"
+    assert L["included"] == [("en",)]
+
+
+def test_language_from_env_and_argument(samples, tmp_path, monkeypatch):
+    monkeypatch.delenv("CHANNEL_LANGUAGE", raising=False)
+    monkeypatch.setenv("LANGUAGE", "fr_FR.UTF-8:en")
+    assert _langs(build(samples, tmp_path / "a")["db"])["nodes"] == {"fr"}
+    monkeypatch.setenv("LANGUAGE", "not-a-language")
+    assert _langs(build(samples, tmp_path / "b")["db"])["nodes"] == {"en"}
+    r = build(samples, tmp_path / "c", lang="pt-BR")
+    assert _langs(r["db"])["languages"] == [("pt-BR", "pt", "ltr")]
+    r = build(samples, tmp_path / "d", lang="bogus")  # invalid -> default, never null
+    assert _langs(r["db"])["nodes"] == {"en"}
+
+
+def test_channel_json_language(tmp_path):
+    import json
+    from channel_builder import usb
+    from le_utils.constants import licenses
+    (tmp_path / "channel.json").write_text(json.dumps({"language": "sn"}))
+    assert usb.read_channel_json(str(tmp_path), dict(licenses.choices)) == ({"language": "sn"}, [])
+    (tmp_path / "channel.json").write_text(json.dumps({"language": "klingon"}))
+    meta, warns = usb.read_channel_json(str(tmp_path), dict(licenses.choices))
+    assert "language" not in meta and "unknown language" in warns[0]

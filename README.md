@@ -40,6 +40,10 @@ import it into the local Kolibri (app-kolibri). Replaces a full Kolibri Studio p
   `channel.json` in that folder sets `name`, `author`, `description`, `license`
   (a Kolibri licence id such as `CC BY`) and `license_description`. Bad JSON gives a
   warning and the defaults (folder name, stick label as author, All Rights Reserved).
+  `language` (e.g. `en`, `sn`, `pt-BR`) sets the channel language; if it is missing or
+  unknown, `CHANNEL_LANGUAGE` / `LANGUAGE` from the environment is used, else `en`.
+  Every channel, node and file always gets a language: Kolibri 0.15.5's HTML5 viewer
+  (used for images) crashes on resources without one.
 - One FIFO queue runs all builds, manual and automatic, one at a time. A stick that
   hasn't changed (same paths, sizes and mtimes) is skipped. Sticks over
   `AUTO_BUILD_MAX_GB` (8) are refused for auto-build. If a stick is pulled out

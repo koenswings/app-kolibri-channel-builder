@@ -16,7 +16,10 @@ cid = %r
 res = ContentNode.objects.filter(channel_id=cid).exclude(kind='topic')
 print('RESULT', json.dumps(dict(version=ChannelMetadata.objects.get(id=cid).version,
       total=res.count(), available=res.filter(available=True).count(),
-      kinds=sorted(res.values_list('kind', flat=True)))))
+      kinds=sorted(res.values_list('kind', flat=True)),
+      langs=sorted(set(ContentNode.objects.filter(channel_id=cid).values_list('lang_id', flat=True)), key=str),
+      lang_ids_ok=all(n.lang is not None and n.lang.id == 'en' for n in res),
+      included=sorted(ChannelMetadata.objects.get(id=cid).included_languages.values_list('id', flat=True)))))
 """
 
 
@@ -49,6 +52,8 @@ def test_disk_import(samples, tmp_path, clean_kolibri):
     v = verify(clean_kolibri, r["channel_id"])
     assert v["total"] == v["available"] == 6
     assert v["kinds"] == ["audio", "document", "document", "html5", "video", "video"]
+    # html5_viewer reads contentNode.lang.id: every node must carry a language
+    assert v["langs"] == ["en"] and v["lang_ids_ok"] and v["included"] == ["en"]
 
 
 def test_network_import_and_update(samples, tmp_path, clean_kolibri, monkeypatch):
@@ -66,6 +71,7 @@ def test_network_import_and_update(samples, tmp_path, clean_kolibri, monkeypatch
         kolibri(clean_kolibri, "importcontent", "network", cid, "--baseurl", url)
         v = verify(clean_kolibri, cid)
         assert v["version"] == 1 and v["total"] == v["available"] == 6
+        assert v["langs"] == ["en"] and v["lang_ids_ok"]
         # teacher adds a file and rebuilds -> Kolibri picks up the new version
         shutil.copy(str(samples / "Science" / "Reading" / "Worksheet.pdf"), str(tmp_path / "w2.pdf"))
         src2 = tmp_path / "src2"

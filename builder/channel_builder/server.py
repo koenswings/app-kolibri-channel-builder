@@ -93,9 +93,15 @@ def list_channels():
             c.row_factory = sqlite3.Row
             r = c.execute("select id,name,description,author,version,last_updated,published_size,"
                           "total_resource_count,tagline from content_channelmetadata").fetchone()
-            c.close()
             if r:
-                out.append(dict(r))
+                r = dict(r)
+                try:
+                    r["language"] = (c.execute("select lang_id from content_contentnode where id=?",
+                                               (r["id"],)).fetchone() or [None])[0]
+                except sqlite3.Error:
+                    r["language"] = None
+                out.append(r)
+            c.close()
         except sqlite3.Error as e:
             log.warning("bad channel db %s: %s", fn, e)
     return out
@@ -103,11 +109,12 @@ def list_channels():
 
 def public_repr(ch):
     """Shape of Kolibri 0.15 /api/public/v1/channels entries."""
-    return {"id": ch["id"], "name": ch["name"], "language": None, "description": ch["description"],
+    return {"id": ch["id"], "name": ch["name"], "language": ch.get("language"), "description": ch["description"],
             "tagline": ch["tagline"], "total_resource_count": ch["total_resource_count"],
             "version": ch["version"], "published_size": ch["published_size"],
             "last_published": ch["last_updated"], "icon_encoding": "", "matching_tokens": [],
-            "public": False, "included_languages": []}
+            "public": False,
+            "included_languages": [ch["language"]] if ch.get("language") else []}
 
 
 FILES_JSON = ".idea-files.json"
@@ -196,10 +203,10 @@ def safe_files_path(rel):
     return p
 
 
-def _usb_build(stick, src, rel, name, author, description, lic, lic_desc, job):
+def _usb_build(stick, src, rel, name, author, description, lic, lic_desc, job, lang=None):
     check = usb.make_check(USB_ROOT, stick)
     b = Builder(src, EXPORT_DIR, name, author, usb.source_id(stick, rel), description, lic, lic_desc,
-                progress=job.progress, check=check)
+                lang=lang, progress=job.progress, check=check)
     try:
         return b.build()
     except OSError:
@@ -353,7 +360,8 @@ class AutoBuilder(object):
             r = _usb_build(stick, absdir, rel, meta.get("name") or rel.split("/", 1)[1],
                            meta.get("author") or stick["label"], meta.get("description", ""),
                            meta.get("license") or DEFAULT_LICENSE,
-                           meta.get("license_description", DEFAULT_LICENSE_DESCRIPTION), job)
+                           meta.get("license_description", DEFAULT_LICENSE_DESCRIPTION), job,
+                           lang=meta.get("language"))
             self._state().put(sid, fp)
             return r
         return run
