@@ -12,7 +12,6 @@ import logging
 import os
 import re
 import shutil
-import socket
 import sqlite3
 import tempfile
 import threading
@@ -45,7 +44,26 @@ LAN_IP = os.environ.get("LAN_IP", "").strip()
 # container listens on PORT (8090), which Kolibri on the LAN cannot reach.
 PUBLIC_PORT = os.environ.get("PUBLIC_PORT", "").strip()
 USB_POLL_SECONDS = float(os.environ.get("USB_POLL_SECONDS", "5"))
-DEVICE_NAME = os.environ.get("DEVICE_NAME") or "IDEA channel builder (%s)" % socket.gethostname()
+
+
+def resolve_device_name(environ=None):
+    """Kolibri peer device_name shown on /api/public/info.
+
+    Priority: non-empty DEVICE_NAME env; else "Channel builder (<IDEA_PI_HOSTNAME>)"
+    when that hostname is set; else plain "Channel builder". Never uses the
+    container hostname and never emits empty parentheses.
+    """
+    env = os.environ if environ is None else environ
+    explicit = (env.get("DEVICE_NAME") or "").strip()
+    if explicit:
+        return explicit
+    host = (env.get("IDEA_PI_HOSTNAME") or "").strip()
+    if host:
+        return "Channel builder (%s)" % host
+    return "Channel builder"
+
+
+DEVICE_NAME = resolve_device_name()
 INSTANCE_ID = os.environ.get("INSTANCE_ID", "1dea0c4a1b1100000000000000000000")
 KOLIBRI_VERSION = os.environ.get("KOLIBRI_VERSION", "0.15.5")
 
