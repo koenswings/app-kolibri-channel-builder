@@ -27,6 +27,14 @@ services:
     pull_policy: missing
     init: true
     mem_limit: 300m
+    # Same probe as the image's HEALTHCHECK, stated in compose so the Engine/Console see it
+    # without inspecting the image. Container port is fixed (8090).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
     ports:
       - ${port}:8090
     volumes:
