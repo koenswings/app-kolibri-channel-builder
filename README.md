@@ -53,19 +53,23 @@ import it into the local Kolibri (app-kolibri). Replaces a full Kolibri Studio p
   Also `GET /api/queue` and `GET /api/jobs/<id>`. The page polls them.
 - `AUTO_BUILD=0` switches automatic builds off.
 
-## Building the image (no published image yet)
+## Image
 
-`compose.yaml` uses `pull_policy: never`, so the image has to exist on the Pi:
+`compose.yaml` uses the published multi-arch image
+`ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5` (linux/amd64 + linux/arm64)
+with `pull_policy: missing`, so a Pi pulls it once and then works offline.
+
+It is published by `.github/workflows/publish-image.yml` (GitHub Actions): on a
+tag push it pushes `:1.0-0.15.5` and `:<tag>`; run it by hand (workflow_dispatch)
+to republish from a branch. Bump the `1.0-0.15.5` tag together with the Kolibri
+version (see below).
+
+Local build, for development only:
 
 ```sh
 # on the Pi (arm64). On some Pis Docker builds get no DNS: --network host fixes that
-docker build --network host -t koenswings/kolibri-channel-builder:1.0-0.15.5 .
+docker build --network host -t ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5 .
 ```
-
-`docs/publish-image.yml` is a ready GitHub Actions job that would publish a
-multi-arch image to `ghcr.io/koenswings/kolibri-channel-builder`. Someone with the
-`workflow` scope has to copy it to `.github/workflows/`. After the first publish,
-compose can point at the ghcr image with `pull_policy: missing`.
 
 ## Kolibri address
 
