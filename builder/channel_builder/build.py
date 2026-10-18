@@ -51,6 +51,9 @@ TYPES = {
 }
 for _e in IMAGE_EXT:
     TYPES[_e] = (content_kinds.HTML5, format_presets.HTML5_ZIP, la.EXPLORE)
+# A real, interactive HTML5 app: a .zip with index.html at its root (Kolibri's
+# html5_zip format). Stored unchanged; zips without a root index.html are skipped.
+TYPES["zip"] = (content_kinds.HTML5, format_presets.HTML5_ZIP, la.EXPLORE)
 
 
 FALLBACK_LANGUAGE = "en"
@@ -122,6 +125,31 @@ def probe(path):
     return (int(round(float(d))) if d else None), warns
 
 
+def html5_app_problem(path):
+    """None if path is a usable HTML5 app zip (index.html at the root), else why not."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = set(z.namelist())
+            if "index.html" not in names:
+                return "no index.html at the top of the zip"
+            bad = z.testzip()
+            if bad:
+                return "damaged zip (%s)" % bad
+    except (OSError, zipfile.BadZipFile, RuntimeError, NotImplementedError) as e:
+        return "not a readable zip (%s)" % e
+    return None
+
+
+def supported(path):
+    """True if the builder turns this file into a resource."""
+    ext = os.path.splitext(path)[1].lower().lstrip(".")
+    if ext not in TYPES:
+        return False
+    if ext == "zip":
+        return html5_app_problem(path) is None
+    return True
+
+
 def image_zip(path, title):
     """Wrap an image in a minimal HTML5 zip (Kolibri 0.15 has no image kind)."""
     name = "image" + os.path.splitext(path)[1].lower()
@@ -146,8 +174,8 @@ def iter_supported(src):
         for f in sorted(files):
             if f.startswith("."):
                 continue
-            if os.path.splitext(f)[1].lower().lstrip(".") in TYPES:
-                p = os.path.join(cur, f)
+            p = os.path.join(cur, f)
+            if supported(p):
                 yield os.path.relpath(p, src), p
 
 
@@ -239,6 +267,13 @@ class Builder(object):
             if ext not in TYPES:
                 self.skipped.append(r)
                 continue
+            if ext == "zip":
+                why = html5_app_problem(p)
+                if why:
+                    self.skipped.append(r)
+                    self.warnings.append("%s: skipped, %s (an HTML5 app zip needs index.html "
+                                         "at its root)" % (r, why))
+                    continue
             if self.check:
                 self.check()
             kind, preset, activity = TYPES[ext]
@@ -246,7 +281,7 @@ class Builder(object):
             if kind in (content_kinds.VIDEO, content_kinds.AUDIO):
                 duration, w = probe(p)
                 self.warnings.extend(x.replace(p, r) for x in w)
-            if kind == content_kinds.HTML5:
+            if kind == content_kinds.HTML5 and ext != "zip":
                 md5, fext = self._store_bytes(image_zip(p, title), "zip"), "zip"
             else:
                 md5, fext = self._store_path(p, ext), ext
