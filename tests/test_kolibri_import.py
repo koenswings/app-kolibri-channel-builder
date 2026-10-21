@@ -84,3 +84,23 @@ def test_network_import_and_update(samples, tmp_path, clean_kolibri, monkeypatch
         assert v["version"] == 2 and v["total"] == v["available"] == 7
     finally:
         srv.shutdown()
+
+
+def test_html5_app_zip_imports_and_is_available(tmp_path, clean_kolibri):
+    """A real HTML5 app zip imports as an available html5 resource with its own files intact."""
+    import zipfile
+    from channel_builder.build import Builder
+    src = tmp_path / "src" / "Maths"
+    src.mkdir(parents=True)
+    with zipfile.ZipFile(str(src / "Fraction_game.zip"), "w") as z:
+        z.writestr("index.html", "<script src='app.js'></script><button id=b>1/2</button>")
+        z.writestr("app.js", "document.getElementById('b').onclick=function(){this.textContent='2/4'};")
+    r = Builder(str(tmp_path / "src"), str(tmp_path / "export"), "Apps", "Ms T", "it-app").build()
+    exp = str(tmp_path / "export" / "KOLIBRI_DATA")
+    kolibri(clean_kolibri, "importchannel", "disk", r["channel_id"], exp)
+    kolibri(clean_kolibri, "importcontent", "disk", r["channel_id"], exp)
+    v = verify(clean_kolibri, r["channel_id"])
+    assert v["kinds"] == ["html5"] and v["available"] == 1 and v["lang_ids_ok"]
+    stored = [p for p in (clean_kolibri / "content" / "storage").rglob("*.zip")]
+    assert len(stored) == 1
+    assert sorted(zipfile.ZipFile(str(stored[0])).namelist()) == ["app.js", "index.html"]

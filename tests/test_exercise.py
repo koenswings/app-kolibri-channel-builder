@@ -130,3 +130,22 @@ def test_builder_writes_exercise_nodes(samples, tmp_path):
     r2 = Builder(str(src), str(tmp_path / "out"), "T", "Ms T", "ex-test").build()
     assert rows(r2["db"], "select assessment_item_ids from content_assessmentmetadata order by id") == \
         rows(r["db"], "select assessment_item_ids from content_assessmentmetadata order by id")
+
+
+def test_channel_with_exercises_and_html5_app_zips(samples, tmp_path):
+    """Exercises (#9) and real HTML5 app zips (#8) in one channel."""
+    src = tmp_path / "src"
+    shutil.copytree(str(samples), str(src))
+    shutil.copytree(EXDIR, str(src / "Practice"))
+    with zipfile.ZipFile(str(src / "Practice" / "Fraction_game.zip"), "w") as z:
+        z.writestr("index.html", "<button>1/2</button>")
+    with zipfile.ZipFile(str(src / "Practice" / "Not_an_app.zip"), "w") as z:
+        z.writestr("readme.txt", "x")
+    r = Builder(str(src), str(tmp_path / "out"), "Mixed", "Ms T", "mixed").build()
+    assert r["exercises"] == 2 and r["resources"] == 9
+    assert "Practice/Not_an_app.zip" in r["skipped"] and "Practice/Broken.exercise.json" in r["skipped"]
+    kinds = sorted(k for (k,) in rows(r["db"], "select kind from content_contentnode where kind!='topic'"))
+    assert kinds.count("exercise") == 2 and kinds.count("html5") == 2  # image wrapper + app zip
+    app = rows(r["db"], "select l.extension from content_contentnode n join content_file f on f.contentnode_id=n.id "
+                        "join content_localfile l on l.id=f.local_file_id where n.title='Fraction game'")
+    assert app == [("zip",)]

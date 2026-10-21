@@ -125,3 +125,50 @@ def test_channel_json_language(tmp_path):
     (tmp_path / "channel.json").write_text(json.dumps({"language": "klingon"}))
     meta, warns = usb.read_channel_json(str(tmp_path), dict(licenses.choices))
     assert "language" not in meta and "unknown language" in warns[0]
+
+
+# -- real HTML5 apps (.zip with index.html at the root) ------------------------
+def _zip(path, files):
+    import zipfile
+    with zipfile.ZipFile(str(path), "w") as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+
+
+def test_html5_app_zip_is_interactive_resource(tmp_path):
+    import hashlib
+    from channel_builder.build import count_supported
+    src = tmp_path / "src"
+    (src / "Maths").mkdir(parents=True)
+    app = src / "Maths" / "Fraction_game.zip"
+    _zip(app, {"index.html": "<script src='app.js'></script><button>1/2</button>",
+               "app.js": "document.querySelector('button').onclick=function(){};"})
+    _zip(src / "Maths" / "Not_an_app.zip", {"notes.txt": "hello"})
+    (src / "Maths" / "Broken.zip").write_bytes(b"PK\x03\x04 not really a zip")
+    assert count_supported(str(src)) == 1  # only the real app counts
+    r = build(src, tmp_path / "out")
+    assert r["resources"] == 1
+    assert sorted(r["skipped"]) == ["Maths/Broken.zip", "Maths/Not_an_app.zip"]
+    assert any(w.startswith("Maths/Not_an_app.zip: skipped, no index.html") for w in r["warnings"])
+    assert any(w.startswith("Maths/Broken.zip: skipped, not a readable zip") for w in r["warnings"])
+    (title, kind, acts), = rows(r["db"], "select title, kind, learning_activities from content_contentnode "
+                                         "where kind!='topic'")
+    assert (title, kind) == ("Fraction game", "html5")
+    from le_utils.constants.labels import learning_activities as la
+    assert la.EXPLORE in acts
+    (md5, preset, ext), = rows(r["db"], "select f.local_file_id, f.preset, l.extension from content_file f "
+                                        "join content_localfile l on l.id=f.local_file_id")
+    # stored unchanged (not wrapped like an image), so its own JS runs in Kolibri
+    assert md5 == hashlib.md5(app.read_bytes()).hexdigest()
+    assert (preset, ext) == ("html5_zip", "zip")
+    stored = tmp_path / "out" / "KOLIBRI_DATA" / "content" / "storage" / md5[0] / md5[1] / (md5 + ".zip")
+    assert stored.read_bytes() == app.read_bytes()
+
+
+def test_image_still_wrapped(samples, tmp_path):
+    import zipfile
+    r = build(samples, tmp_path)
+    (md5,), = rows(r["db"], "select f.local_file_id from content_file f join content_contentnode n "
+                            "on n.id=f.contentnode_id where n.kind='html5'")
+    z = zipfile.ZipFile(str(tmp_path / "KOLIBRI_DATA" / "content" / "storage" / md5[0] / md5[1] / (md5 + ".zip")))
+    assert sorted(z.namelist())[0] == "image.png" and "index.html" in z.namelist()
