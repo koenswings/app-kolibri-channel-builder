@@ -26,6 +26,28 @@ import it into the local Kolibri (app-kolibri). Replaces a full Kolibri Studio p
   (builder incl. ffprobe, server during builds); `mem_limit: 300m`. Files are streamed,
   so RAM does not grow with file size (400 MB file: 38 MB peak).
 
+## Exercises (idea#294)
+
+A file `<title>.exercise.json` becomes a real Kolibri **exercise** (Perseus, kind `exercise`,
+learning activity Practice): learners get *Check*, hints and mastery, and coaches see progress
+and quiz questions in Coach. Format and rules: `builder/channel_builder/exercise.py` docstring.
+
+```json
+{"title": "Fractions practice", "mastery": {"m": 4, "n": 5},
+ "passage": "optional text shown above every question",
+ "questions": [
+  {"type": "choice", "question": "1/4 + 2/4 = ?", "choices": ["3/4", "3/8"], "answer": "3/4", "hint": "Add the tops."},
+  {"type": "number", "question": "6 x 7 = ?", "answer": 42}]}
+```
+
+- `choice` (2–8 choices; `answer` text/index, or a list for "choose all"), `number` (int,
+  decimal or `"3/4"`, optional `tolerance`). Mastery `do_all` or `{"m","n"}`; default
+  m_of_n with n = min(5, questions), m = n−1.
+- Written to the DB like Studio does: `content_assessmentmetadata` (32-hex item ids,
+  mastery model JSON), file preset `exercise`, extension `.perseus` (zip with
+  `exercise.json` + `<item id>.json`). Item ids are stable across rebuilds, so quizzes keep working.
+- An invalid file is skipped with a warning naming the problem; the rest of the channel builds.
+
 ## USB sticks and automatic builds (idea#193)
 
 - The Engine mounts FAT/exFAT sticks read-only and binds them in at `/mnt/idea-usb`

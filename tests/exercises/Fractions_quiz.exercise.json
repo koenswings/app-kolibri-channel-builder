@@ -1,0 +1,10 @@
+{
+  "title": "Fractions check",
+  "description": "Three quick fraction questions",
+  "mastery": {"m": 2, "n": 3},
+  "questions": [
+    {"type": "choice", "question": "What is $\\frac{1}{2} + \\frac{1}{4}$?", "choices": ["3/4", "2/6", "1/8"], "answer": "3/4", "hint": "Turn the half into quarters."},
+    {"type": "number", "question": "How many quarters make one whole?", "answer": 4},
+    {"type": "choice", "question": "Which are bigger than one half?", "choices": ["2/3", "1/3", "3/4", "1/4"], "answer": ["2/3", "3/4"]}
+  ]
+}

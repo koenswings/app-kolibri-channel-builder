@@ -23,6 +23,8 @@ import sys
 import uuid
 import zipfile
 
+from channel_builder import exercise as ex
+
 import kolibri  # noqa: F401  (sets up kolibri.dist on sys.path)
 from kolibri.core.content.constants.schema_versions import CONTENT_SCHEMA_VERSION
 from kolibri.core.content.contentschema.versions import content_schema_current as schema
@@ -51,6 +53,23 @@ TYPES = {
 }
 for _e in IMAGE_EXT:
     TYPES[_e] = (content_kinds.HTML5, format_presets.HTML5_ZIP, la.EXPLORE)
+# Teacher-written exercise (see exercise.py): <title>.exercise.json -> Perseus exercise
+EXERCISE_TYPE = "exercise.json"
+TYPES[EXERCISE_TYPE] = (content_kinds.EXERCISE, format_presets.EXERCISE, la.PRACTICE)
+
+
+def file_type(name):
+    """TYPES key for a file name ('pdf', 'exercise.json', ...) or None."""
+    low = name.lower()
+    if low.endswith("." + EXERCISE_TYPE):
+        return EXERCISE_TYPE
+    ext = os.path.splitext(low)[1].lstrip(".")
+    return ext if ext in TYPES and ext != EXERCISE_TYPE else None
+
+
+def resource_title(name):
+    base = name[:-len("." + EXERCISE_TYPE)] if file_type(name) == EXERCISE_TYPE else os.path.splitext(name)[0]
+    return base.replace("_", " ").strip() or name
 
 
 FALLBACK_LANGUAGE = "en"
@@ -146,7 +165,7 @@ def iter_supported(src):
         for f in sorted(files):
             if f.startswith("."):
                 continue
-            if os.path.splitext(f)[1].lower().lstrip(".") in TYPES:
+            if file_type(f):
                 p = os.path.join(cur, f)
                 yield os.path.relpath(p, src), p
 
@@ -175,6 +194,7 @@ class Builder(object):
         self.total, self.done = 0, 0
         self.warnings, self.skipped = [], []
         self.nodes, self.files, self.localfiles = [], [], {}
+        self.assessments = []  # content_assessmentmetadata rows (exercises)
         self.storage = os.path.join(self.out, "KOLIBRI_DATA", "content", "storage")
         self.dbdir = os.path.join(self.out, "KOLIBRI_DATA", "content", "databases")
 
@@ -225,7 +245,7 @@ class Builder(object):
         for e in entries:
             p = os.path.join(absdir, e)
             r = os.path.join(rel, e) if rel else e
-            title = os.path.splitext(e)[0].replace("_", " ").strip() or e
+            title = resource_title(e)
             if os.path.isdir(p):
                 sort += 1
                 t = self._node(r, e, content_kinds.TOPIC, parent["id"], level, ancestors, sort)
@@ -235,24 +255,43 @@ class Builder(object):
                     self.nodes.remove(t)
                     sort -= 1
                 continue
-            ext = os.path.splitext(e)[1].lower().lstrip(".")
-            if ext not in TYPES:
+            ext = file_type(e)
+            if not ext:
                 self.skipped.append(r)
                 continue
             if self.check:
                 self.check()
             kind, preset, activity = TYPES[ext]
-            duration = None
+            duration, extra = None, {}
+            if kind == content_kinds.EXERCISE:
+                try:
+                    exr = ex.load(p, title, item_id=lambda i, r=r: uid(self.source_id, "item", r, str(i)))
+                except ex.ExerciseError as err:
+                    self.warnings.append("%s: not a valid exercise, skipped (%s)" % (r, err))
+                    self.skipped.append(r)
+                    self.done += 1
+                    continue
+                title = exr["title"]
+                extra = dict(description=exr["description"][:400])
             if kind in (content_kinds.VIDEO, content_kinds.AUDIO):
                 duration, w = probe(p)
                 self.warnings.extend(x.replace(p, r) for x in w)
-            if kind == content_kinds.HTML5:
+            if kind == content_kinds.EXERCISE:
+                md5, fext = self._store_bytes(exr["perseus"], "perseus"), "perseus"
+            elif kind == content_kinds.HTML5:
                 md5, fext = self._store_bytes(image_zip(p, title), "zip"), "zip"
             else:
                 md5, fext = self._store_path(p, ext), ext
             sort += 1
             n = self._node(r, title, kind, parent["id"], level, ancestors, sort,
-                           activity=activity, duration=duration)
+                           activity=activity, duration=duration, **extra)
+            if kind == content_kinds.EXERCISE:
+                self.assessments.append(dict(
+                    id=uid(self.channel_id, "assessment", r), contentnode_id=n["id"],
+                    assessment_item_ids=json.dumps(exr["item_ids"]),
+                    number_of_assessments=len(exr["item_ids"]),
+                    mastery_model=json.dumps(exr["mastery_model"]),
+                    randomize=exr["randomize"], is_manipulable=False))
             self.done += 1
             if self.progress:
                 self.progress(self.done, self.total)
@@ -307,6 +346,8 @@ class Builder(object):
             S.flush()
         for f in self.files:
             S.add(schema.ContentFile(**f))
+        for a in self.assessments:
+            S.add(schema.ContentAssessmentmetadata(**a))
         S.add(schema.ContentChannelmetadata(
             id=self.channel_id, name=self.name[:200], description=self.description[:400],
             author=self.author[:400], version=version, thumbnail="",
@@ -323,7 +364,7 @@ class Builder(object):
         engine.dispose()
         os.replace(tmp, dbpath)
         return dict(channel_id=self.channel_id, version=version, db=dbpath, language=self.lang,
-                    resources=len(resources), topics=len(self.nodes) - len(resources),
+                    resources=len(resources), exercises=len(self.assessments), topics=len(self.nodes) - len(resources),
                     files=len(self.localfiles), warnings=self.warnings, skipped=self.skipped)
 
     @staticmethod

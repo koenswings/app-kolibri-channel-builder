@@ -1,0 +1,8 @@
+{
+  "passage": "Rudo walks to the river with her goat. The goat drinks the cold water.",
+  "mastery": "do_all",
+  "questions": [
+    {"question": "Who walks to the river?", "choices": ["Rudo", "The goat", "Rudo's mother"], "answer": 0},
+    {"question": "What does the goat drink?", "choices": ["Milk", "Water", "Tea"], "answer": "Water"}
+  ]
+}
