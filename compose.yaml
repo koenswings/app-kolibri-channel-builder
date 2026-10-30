@@ -10,8 +10,17 @@ x-app:
   category: education
   icon: icon.png
   author: Koen Swings
-  version: TBD-commit-sha
+  version: "1.0"
   instanceName: kolibri-channel-builder
+  # updateApp (idea#351, agent-app-dev#23). healthTimeout: integer seconds.
+  # No migration (stateless builder; built channels are plain files): default 600 s.
+  healthCheck:
+    path: /healthz
+  healthTimeout: 600
+  updatesFrom: []        # no earlier App major exists; minor updates need no entry
+  migrationNote: Built channels in data/export are kept; nothing in them is changed by an update.
+  snapshotExclude:
+    - data/work            # build scratch space, recreated on the next build
   filesMount:
     path: /mnt/idea-files
     services: [builder]
@@ -23,6 +32,8 @@ x-app:
 services:
   builder:
     image: ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5@sha256:7314f99fb32549f1b0ee27b8539f1f1e9ba9721a620c7ac61034c5832fa17779
+    labels:
+      x-app-version: "1.0"
     restart: no
     pull_policy: missing
     init: true
