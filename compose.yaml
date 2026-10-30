@@ -10,7 +10,7 @@ x-app:
   category: education
   icon: icon.png
   author: Koen Swings
-  version: TBD-commit-sha
+  version: "1.0"
   instanceName: kolibri-channel-builder
   # updateApp (idea#351, agent-app-dev#23). healthTimeout: integer seconds.
   # No migration (stateless builder; built channels are plain files): default 600 s.
@@ -32,6 +32,8 @@ x-app:
 services:
   builder:
     image: ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5
+    labels:
+      x-app-version: "1.0"
     restart: no
     pull_policy: missing
     init: true
