@@ -12,6 +12,15 @@ x-app:
   author: Koen Swings
   version: TBD-commit-sha
   instanceName: kolibri-channel-builder
+  # updateApp (idea#351, agent-app-dev#23). healthTimeout: integer seconds.
+  # No migration (stateless builder; built channels are plain files): default 600 s.
+  healthCheck:
+    path: /healthz
+  healthTimeout: 600
+  updatesFrom: []        # no earlier App major exists; minor updates need no entry
+  migrationNote: Built channels in data/export are kept; nothing in them is changed by an update.
+  snapshotExclude:
+    - data/work            # build scratch space, recreated on the next build
   filesMount:
     path: /mnt/idea-files
     services: [builder]
