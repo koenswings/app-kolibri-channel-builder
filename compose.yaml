@@ -31,7 +31,7 @@ x-app:
     services: [builder]
 services:
   builder:
-    image: ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5
+    image: ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5@sha256:7314f99fb32549f1b0ee27b8539f1f1e9ba9721a620c7ac61034c5832fa17779
     labels:
       x-app-version: "1.0"
     restart: no
