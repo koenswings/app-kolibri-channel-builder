@@ -22,9 +22,10 @@ import it into the local Kolibri (app-kolibri). Replaces a full Kolibri Studio p
   CLI equivalent: `kolibri manage importchannel network <id> --baseurl http://<pi>:<port>` then
   `importcontent network ...`; or from the export folder:
   `importchannel disk <id> <export>/KOLIBRI_DATA` + `importcontent disk ...`.
-- **Footprint:** one Python container, no DB/broker. Measured peak RSS ~40–57 MB
-  (builder incl. ffprobe, server during builds); `mem_limit: 300m`. Files are streamed,
-  so RAM does not grow with file size (400 MB file: 38 MB peak).
+- **Footprint:** one Python container, no DB/broker. Measured peak ~100 MiB summed RSS
+  (idea03, 2026-11-14, idea#518: server ~44 MB, flat, plus one ffprobe at a time, up to
+  57 MB; 1.24 GB input incl. a 613 MB 720p video); `mem_limit: 300m` leaves headroom.
+  Files are streamed, so RAM does not grow with file size.
 
 ## Exercises (idea#294)
 
