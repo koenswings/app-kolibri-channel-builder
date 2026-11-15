@@ -167,3 +167,7 @@ See [docs/INDEX.md](docs/INDEX.md).
 - The Nextcloud folder/user/password fields show only for the Nextcloud source (inline JS); without JS all fields
   are shown with a note. Styling follows the IDEA house style (red/blue headings, callout cards, blue table
   headers, DejaVu Sans/system fonts), fully offline, responsive down to phone width.
+
+## Release check against the previous release (idea#403)
+
+`AAD_CHECK_COMPOSE=<agent-app-dev>/script/check-compose.mjs script/check-base-ref.sh` compares `compose.yaml` with the previous release tag (agent-app-dev `check-compose --base-ref`): a stateful image (MariaDB, MySQL, Postgres, Mongo, Redis) that moves to a new series needs an App major bump. The previous release tag is the highest `<major>.<minor>[-<upstream>]` tag that is an ancestor of HEAD and not HEAD's own tag; a first release is skipped with a note. It needs tags and full history (CI: `fetch-depth: 0`); a shallow clone fails. `tests/test_release_base_ref.py` runs it in the test suite (the compare only when `AAD_CHECK_COMPOSE` is set).
