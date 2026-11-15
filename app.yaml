@@ -1,5 +1,4 @@
 app: kolibri-channel-builder
-idea_app_version: "1.0"
 
 compatibility:
   engine_min: "0.9.0"
