@@ -4,6 +4,8 @@ IDEA App Disk: teachers turn their own folders into a **Kolibri channel**, fully
 import it into the local Kolibri (app-kolibri). Replaces a full Kolibri Studio port
 (design: Option C, approved).
 
+Current release: **1.0** (`x-app.version` and git tag `1.0`). The image is `ghcr.io/koenswings/kolibri-channel-builder:1.0-0.15.5`.
+
 - **Folder = topic, file = resource.** v1 types: PDF, EPUB (document), MP4/WebM (video, kept as-is,
   warning for codecs other than H.264/VP8/VP9 + AAC/MP3/Opus/Vorbis), MP3 (audio), images
   (PNG/JPG/GIF/WebP/SVG, wrapped in a tiny HTML5 zip because Kolibri 0.15 has no image kind).
@@ -131,8 +133,11 @@ folders, chowns them to the `builder` user (uid/gid 1000, override with
 
 The channel DB is written with Kolibri's own SQLAlchemy content schema
 (`kolibri.core.content.contentschema.versions.content_schema_current`, schema 5), so the
-builder pins the **same Kolibri version as app-kolibri: 0.15.5**. Bump both together; CI's
-import test catches schema drift.
+builder is still built with **Kolibri 0.15.5** (image tag `1.0-0.15.5`, content schema 5).
+`app-kolibri` on main is now **1.3-0.19.5** (Kolibri 0.19.5). Do not read this README as
+saying the two Apps are currently on the same Kolibri version. Bump the builder together
+with a deliberate app-kolibri hop; CI's import test catches schema drift.
+
 
 ## Layout
 
